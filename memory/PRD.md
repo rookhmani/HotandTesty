@@ -33,6 +33,16 @@ Build a modern, minimal food e-commerce website for "Hot And Tasty Food Shop" �
 - Footer with social links and copyright.
 - Admin (`/admin`, password `admin123`) — Orders tab (status pills) + Menu tab (CRUD, availability toggle).
 
+## Update — UPI Payment (2026-04-28)
+- **Replaced Stripe UI tile with "Pay via UPI" QR-code flow** (Stripe backend kept for backward compat, hidden from UI).
+- New `UPIPaymentModal`: shows QR image, UPI ID (`rookhmani@upi`), Copy button, UTR input, "I Have Paid ✓" button.
+- New `/order/:orderId` `OrderSuccessPage`: animated green checkmark, "Payment Received!", order summary, total, UTR, tap-to-call CTA `084483 27336`, Back to Home.
+- New backend endpoints:
+  - `GET/PUT /api/settings` — admin-editable UPI ID, account name, QR image URL (seeded with defaults).
+  - `POST /api/orders/{id}/utr` — submits UTR; flips `payment_status` → `paid` and `order_status` → `preparing`. Validates utr length ≥ 6.
+- Order model now stores `utr` and supports `payment_method ∈ {cod, upi, online}` with `payment_status='awaiting_payment'` for UPI orders before UTR is submitted.
+- Admin gets a third tab **"UPI Settings"** to update UPI ID / name / QR image URL with live preview. Orders tab now displays UTR for UPI orders.
+
 ## Test Results
 - **Backend:** 17/17 endpoints passing (after `/api/checkout/status` graceful-fail fix).
 - **Frontend:** 19/19 flows passing (Hero, Menu, filters, search, variants, cart, COD checkout, Stripe redirect, About, OrderInfo, Footer, Cancel, Admin login + orders + menu CRUD).
