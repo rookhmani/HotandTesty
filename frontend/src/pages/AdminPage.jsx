@@ -8,6 +8,8 @@ import {
     createMenuItem,
     updateMenuItem,
     deleteMenuItem,
+    fetchSettings,
+    updateSettings,
 } from "../lib/api";
 import {
     Loader2,
@@ -140,11 +142,23 @@ export default function AdminPage() {
                         onClick={() => setTab("menu")}
                         testId="admin-tab-menu"
                     />
+                    <Tab
+                        label="UPI Settings"
+                        active={tab === "settings"}
+                        onClick={() => setTab("settings")}
+                        testId="admin-tab-settings"
+                    />
                 </div>
             </header>
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {tab === "orders" ? <OrdersTab /> : <MenuTab />}
+                {tab === "orders" ? (
+                    <OrdersTab />
+                ) : tab === "menu" ? (
+                    <MenuTab />
+                ) : (
+                    <SettingsTab />
+                )}
             </main>
         </div>
     );
@@ -259,6 +273,12 @@ function OrdersTab() {
                                 ))}
                             </div>
                             <div className="mt-3 text-xs text-[#A1A1AA]">{o.address}</div>
+                            {o.payment_method === "upi" && o.utr && (
+                                <div className="mt-2 text-xs">
+                                    <span className="text-[#A1A1AA]">UTR: </span>
+                                    <span className="font-mono text-[#FFD700]">{o.utr}</span>
+                                </div>
+                            )}
                             <div className="mt-4 flex flex-wrap gap-2">
                                 {STATUSES.map((s) => (
                                     <button
@@ -526,5 +546,132 @@ function Sel({ label, value, onChange, options, testId }) {
                 ))}
             </select>
         </label>
+    );
+}
+
+
+function SettingsTab() {
+    const [settings, setSettings] = useState(null);
+    const [draft, setDraft] = useState({ upi_id: "", upi_name: "", upi_qr_image: "" });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    const refresh = async () => {
+        setLoading(true);
+        try {
+            const data = await fetchSettings();
+            setSettings(data);
+            setDraft(data);
+        } finally {
+            setLoading(false);
+        }
+    };
+    useEffect(() => {
+        refresh();
+    }, []);
+
+    const onSave = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            const updated = await updateSettings(draft);
+            setSettings(updated);
+            toast.success("Settings updated");
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || "Failed to save");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="py-20 text-center text-[#A1A1AA]">
+                <Loader2 className="animate-spin inline" /> Loading…
+            </div>
+        );
+    }
+
+    return (
+        <div className="grid lg:grid-cols-12 gap-6">
+            <form
+                onSubmit={onSave}
+                data-testid="admin-settings-form"
+                className="lg:col-span-7 bg-[#1A1A1A] border border-[#2a2a2a] rounded-2xl p-6 space-y-4"
+            >
+                <h2 className="font-anton text-3xl uppercase tracking-tight">
+                    UPI Payment Settings
+                </h2>
+                <p className="text-sm text-[#A1A1AA]">
+                    These details show up in the customer's UPI payment modal.
+                </p>
+                <In
+                    label="UPI ID"
+                    value={draft.upi_id || ""}
+                    onChange={(v) => setDraft({ ...draft, upi_id: v })}
+                    testId="settings-upi-id"
+                />
+                <In
+                    label="Account Name"
+                    value={draft.upi_name || ""}
+                    onChange={(v) => setDraft({ ...draft, upi_name: v })}
+                    testId="settings-upi-name"
+                />
+                <In
+                    label="UPI QR Image URL"
+                    value={draft.upi_qr_image || ""}
+                    onChange={(v) => setDraft({ ...draft, upi_qr_image: v })}
+                    testId="settings-upi-qr-image"
+                />
+                <button
+                    type="submit"
+                    disabled={saving}
+                    data-testid="settings-save-btn"
+                    className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                    {saving ? (
+                        <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                        <Save size={16} />
+                    )}
+                    Save
+                </button>
+            </form>
+
+            <div className="lg:col-span-5">
+                <h3 className="font-anton text-2xl uppercase tracking-tight">
+                    QR Preview
+                </h3>
+                <div className="mt-4 bg-[#1A1A1A] border border-[#2a2a2a] rounded-2xl p-5">
+                    <div className="bg-white rounded-2xl p-3 max-w-[260px] mx-auto">
+                        {settings?.upi_qr_image ? (
+                            <img
+                                src={settings.upi_qr_image}
+                                alt="UPI QR"
+                                data-testid="settings-qr-preview"
+                                className="w-full h-auto"
+                            />
+                        ) : (
+                            <div className="aspect-square flex items-center justify-center text-[#0D0D0D]/60 text-xs">
+                                No QR set
+                            </div>
+                        )}
+                    </div>
+                    <div className="mt-3 text-center">
+                        <div className="text-[10px] font-mono uppercase tracking-widest text-[#A1A1AA]">
+                            UPI ID
+                        </div>
+                        <div className="font-mono text-sm font-bold text-[#F5F5F0]">
+                            {settings?.upi_id}
+                        </div>
+                        {settings?.upi_name && (
+                            <div className="text-xs text-[#A1A1AA] mt-0.5">
+                                {settings.upi_name}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 }

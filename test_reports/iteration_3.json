@@ -1,0 +1,56 @@
+{
+  "summary": "Iteration 3 — Tested UPI flow end-to-end on Hot And Tasty Food Shop. Backend: 26/26 pytest tests PASS (added 8 new tests for /api/settings GET/PUT and UPI order + UTR endpoint). Frontend: UPI checkout flow, COD flow, and Admin Settings tab all PASS. No critical issues found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/orders (online)", "issue": "test_create_order_online_high_subtotal_free_delivery has a `return` in pytest body — emits PytestReturnNotNoneWarning. Cosmetic only."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "CheckoutDialog & UPIPaymentModal", "issues": ["Radix DialogContent missing `Description`/`aria-describedby` console warning (a11y, non-blocking, observed twice during checkout)."]},
+      {"screen": "CartDrawer overlay", "issues": ["Sonner toasts at top-right partially overlap the cart-drawer-trigger icon for ~5s after Add-to-cart, intermittently intercepting clicks during automated tests. User can still hit it but a ~6s stack of stacked toasts can briefly cover the cart icon. Consider moving toasts to bottom-right or shorter duration."]}
+    ]
+  },
+  "tests_executed": {
+    "GET /api/settings defaults (rookhmani@upi)": "PASS",
+    "PUT /api/settings updates upi_id/name/qr individually + persistence": "PASS",
+    "PUT /api/settings empty body -> 400": "PASS",
+    "POST /api/orders payment_method=upi -> payment_status=awaiting_payment": "PASS",
+    "POST /api/orders payment_method=cod -> payment_status=cod (unchanged)": "PASS",
+    "POST /api/orders/{id}/utr utr<6 -> 400 'Enter a valid UTR / Transaction ID'": "PASS",
+    "POST /api/orders/{id}/utr valid -> payment_status=paid, order_status=preparing, utr stored, persists on GET": "PASS",
+    "POST /api/orders/non-existent-id/utr -> 404": "PASS",
+    "Frontend UPI flow": "PASS — Checkout dialog shows ONLY COD + UPI tiles (no Stripe/online tile). UPI modal opens with QR (https://customer-assets...), upi-id-display='rookhmani@upi', Copy → 'UPI ID copied' toast, UTR='412345678901', I Have Paid → navigates to /order/{id} with green checkmark, 'PAYMENT RECEIVED!' heading, order summary, PAID badge, UTR shown, call CTA 'For confirmation call: 084483 27336', Back to Home button.",
+    "Frontend COD flow": "PASS — submits and navigates to /order/{id} success page with COD badge.",
+    "Admin Settings tab": "PASS — admin-tab-settings present after login. Form pre-fills with current UPI ID/name/QR URL, QR preview rendered. Edit upi_id → settings-save-btn → 'Settings updated' toast → value persists across reload."
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Low) Fix PytestReturnNotNoneWarning by removing `return o` in test_create_order_online_high_subtotal_free_delivery.",
+    "(Low) Add DialogDescription / aria-describedby to CheckoutDialog and UPIPaymentModal to silence Radix a11y warnings.",
+    "(Low) Reduce toast stacking duration on add-to-cart so it does not cover the cart icon for ~5s."
+  ],
+  "critical_code_review_comments": [
+    "server.py line 88: OrderCreate.payment_method default still 'cod' but allowed values comment says 'cod | online'; missing 'upi' in the docstring comment (functionality works, comment stale).",
+    "Stripe legacy endpoints (/api/checkout/session, /api/checkout/status, /api/webhook/stripe, /api/orders payment_method='online') are still present and reachable. Per problem statement Stripe was replaced with UPI — consider removing dead Stripe code paths and STRIPE_API_KEY env to reduce attack surface, or guard them behind a feature flag.",
+    "CORS allow_origins defaults to '*' — consider restricting in production.",
+    "No rate limiting on /api/admin/login (brute-force risk).",
+    "/api/orders/{id}/utr does not require auth; any client with an order id can mark it paid. For an MVP that's acceptable, but a UTR length>=6 is the only gate. Consider verifying via webhook or admin moderation."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (added TestSettings + TestUPIOrder classes — 8 new tests)"
+  ],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "100% (UPI + COD + Admin Settings flows all green)"},
+  "test_credentials": "Admin password admin123 (working)",
+  "seed_data_creation": "Created several TEST_ orders (UPI awaiting_payment + paid + COD) and one menu item which was deleted. Settings were briefly modified to 'qatest_upi@upi' and restored to 'rookhmani@upi'.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All requested UPI features are working end-to-end. Backend has 26 pytests covering menu, orders (cod/upi/online legacy), Stripe checkout, admin login, settings CRUD, UTR submission with edge cases. Frontend Playwright run: when adding items, wait ~5s for sonner toasts to fade before clicking cart-drawer-trigger (toasts overlap and intercept clicks). Use page.evaluate(\"...click()\") if normal click times out. Selectors confirmed: cart-drawer-trigger, cart-checkout-btn, payment-cod, payment-upi, checkout-submit, upi-payment-modal, upi-qr-image, upi-id-display, upi-copy-btn, upi-utr-input, upi-have-paid-btn, order-success-page, order-summary, success-call-cta, success-back-home, admin-tab-settings, settings-upi-id, settings-upi-name, settings-upi-qr-image, settings-save-btn, settings-qr-preview.",
+  "rca_of_the_issue": "N/A — no failures encountered."
+}

@@ -202,3 +202,103 @@ class TestAdmin:
         r = s.post(f"{API}/admin/login", json={"password": "admin123"}, timeout=30)
         assert r.status_code == 200
         assert r.json()["ok"] is True
+
+
+
+# ====== Settings (UPI) ======
+class TestSettings:
+    def test_get_settings_defaults(self, s):
+        r = s.get(f"{API}/settings", timeout=30)
+        assert r.status_code == 200
+        d = r.json()
+        assert "upi_id" in d and "upi_name" in d and "upi_qr_image" in d
+        assert d["upi_id"] == "rookhmani@upi" or len(d["upi_id"]) > 0
+        assert isinstance(d["upi_qr_image"], str) and d["upi_qr_image"].startswith("http")
+
+    def test_update_settings_individual_fields(self, s):
+        # snapshot original
+        original = s.get(f"{API}/settings", timeout=30).json()
+        try:
+            r1 = s.put(f"{API}/settings", json={"upi_id": "TEST_qa@upi"}, timeout=30)
+            assert r1.status_code == 200
+            assert r1.json()["upi_id"] == "TEST_qa@upi"
+            # other fields intact
+            assert r1.json()["upi_name"] == original["upi_name"]
+
+            r2 = s.put(f"{API}/settings", json={"upi_name": "TEST_QA Name"}, timeout=30)
+            assert r2.status_code == 200
+            assert r2.json()["upi_name"] == "TEST_QA Name"
+            assert r2.json()["upi_id"] == "TEST_qa@upi"
+
+            r3 = s.put(f"{API}/settings", json={"upi_qr_image": "https://example.com/qa.png"}, timeout=30)
+            assert r3.status_code == 200
+            assert r3.json()["upi_qr_image"] == "https://example.com/qa.png"
+
+            # GET reflects persistence
+            g = s.get(f"{API}/settings", timeout=30).json()
+            assert g["upi_id"] == "TEST_qa@upi"
+            assert g["upi_name"] == "TEST_QA Name"
+            assert g["upi_qr_image"] == "https://example.com/qa.png"
+        finally:
+            # restore
+            s.put(f"{API}/settings", json=original, timeout=30)
+
+    def test_update_settings_empty_400(self, s):
+        r = s.put(f"{API}/settings", json={}, timeout=30)
+        assert r.status_code == 400
+
+
+# ====== UPI Order flow ======
+class TestUPIOrder:
+    @pytest.fixture(scope="class")
+    def menu_items(self, s):
+        return s.get(f"{API}/menu", timeout=30).json()
+
+    def _create_order(self, s, menu_items, method):
+        cheap = next(m for m in menu_items if m["price_full"] <= 30)
+        payload = {
+            "customer_name": "TEST_UPI", "phone": "9000000000", "address": "addr",
+            "items": [{"item_id": cheap["id"], "name": cheap["name"], "variant": "full",
+                       "unit_price": cheap["price_full"], "quantity": 1}],
+            "payment_method": method,
+        }
+        return s.post(f"{API}/orders", json=payload, timeout=30)
+
+    def test_create_order_upi_awaiting_payment(self, s, menu_items):
+        r = self._create_order(s, menu_items, "upi")
+        assert r.status_code == 200, r.text
+        o = r.json()
+        assert o["payment_method"] == "upi"
+        assert o["payment_status"] == "awaiting_payment"
+        assert o["utr"] is None or o["utr"] == ""
+
+    def test_create_order_cod_status_unchanged(self, s, menu_items):
+        r = self._create_order(s, menu_items, "cod")
+        assert r.status_code == 200
+        assert r.json()["payment_status"] == "cod"
+
+    def test_utr_short_400(self, s, menu_items):
+        r = self._create_order(s, menu_items, "upi")
+        oid = r.json()["id"]
+        r2 = s.post(f"{API}/orders/{oid}/utr", json={"utr": "123"}, timeout=30)
+        assert r2.status_code == 400
+        body = r2.json()
+        assert "valid UTR" in (body.get("detail") or "")
+
+    def test_utr_valid_marks_paid_and_preparing(self, s, menu_items):
+        r = self._create_order(s, menu_items, "upi")
+        oid = r.json()["id"]
+        r2 = s.post(f"{API}/orders/{oid}/utr", json={"utr": "412345678901"}, timeout=30)
+        assert r2.status_code == 200, r2.text
+        o = r2.json()
+        assert o["payment_status"] == "paid"
+        assert o["order_status"] == "preparing"
+        assert o["utr"] == "412345678901"
+        # GET persists
+        g = s.get(f"{API}/orders/{oid}", timeout=30).json()
+        assert g["payment_status"] == "paid"
+        assert g["utr"] == "412345678901"
+
+    def test_utr_non_existent_order_404(self, s):
+        r = s.post(f"{API}/orders/non-existent-id/utr", json={"utr": "412345678901"}, timeout=30)
+        assert r.status_code == 404

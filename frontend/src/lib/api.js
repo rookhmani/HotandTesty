@@ -37,6 +37,26 @@ export const adminLogin = async (password) => {
     return data;
 };
 
+export const fetchSettings = async () => {
+    const { data } = await api.get("/settings");
+    return data;
+};
+
+export const updateSettings = async (payload) => {
+    const { data } = await api.put("/settings", payload);
+    return data;
+};
+
+export const submitUTR = async (orderId, utr) => {
+    const { data } = await api.post(`/orders/${orderId}/utr`, { utr });
+    return data;
+};
+
+export const getOrder = async (orderId) => {
+    const { data } = await api.get(`/orders/${orderId}`);
+    return data;
+};
+
 export const listOrders = async () => {
     const { data } = await api.get("/orders");
     return data;

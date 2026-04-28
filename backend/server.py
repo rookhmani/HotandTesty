@@ -98,15 +98,20 @@ class Order(BaseModel):
     subtotal: float
     delivery_fee: float = 0.0
     total: float
-    payment_method: str
-    payment_status: str = "pending"  # pending | paid | failed
+    payment_method: str  # cod | upi | online
+    payment_status: str = "pending"  # pending | paid | failed | cod
     order_status: str = "received"  # received | preparing | out-for-delivery | delivered | cancelled
     stripe_session_id: Optional[str] = None
+    utr: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class OrderStatusUpdate(BaseModel):
     order_status: str
+
+
+class UTRSubmit(BaseModel):
+    utr: str
 
 
 class CheckoutInitRequest(BaseModel):
@@ -116,6 +121,12 @@ class CheckoutInitRequest(BaseModel):
 
 class AdminLoginRequest(BaseModel):
     password: str
+
+
+class SiteSettingsUpdate(BaseModel):
+    upi_id: Optional[str] = None
+    upi_name: Optional[str] = None
+    upi_qr_image: Optional[str] = None
 
 
 # ============== HELPERS ==============
@@ -216,6 +227,13 @@ async def create_order(payload: OrderCreate):
     delivery_fee = 0.0 if subtotal >= 300 else 30.0
     total = round(subtotal + delivery_fee, 2)
 
+    if payload.payment_method == "cod":
+        payment_status = "cod"
+    elif payload.payment_method == "upi":
+        payment_status = "awaiting_payment"
+    else:
+        payment_status = "pending"
+
     order = Order(
         customer_name=payload.customer_name,
         phone=payload.phone,
@@ -226,7 +244,7 @@ async def create_order(payload: OrderCreate):
         delivery_fee=delivery_fee,
         total=total,
         payment_method=payload.payment_method,
-        payment_status="pending" if payload.payment_method == "online" else "cod",
+        payment_status=payment_status,
         order_status="received",
     )
 
@@ -263,6 +281,63 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate):
         raise HTTPException(404, "Order not found")
     doc = await db.orders.find_one({"id": order_id}, {"_id": 0})
     return order_doc_to_item(doc)
+
+
+@api_router.post("/orders/{order_id}/utr", response_model=Order)
+async def submit_order_utr(order_id: str, payload: UTRSubmit):
+    utr = (payload.utr or "").strip()
+    if len(utr) < 6:
+        raise HTTPException(400, "Enter a valid UTR / Transaction ID")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    await db.orders.update_one(
+        {"id": order_id},
+        {
+            "$set": {
+                "utr": utr,
+                "payment_status": "paid",
+                "order_status": "preparing",
+            }
+        },
+    )
+    doc = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return order_doc_to_item(doc)
+
+
+# ============== SETTINGS ==============
+DEFAULT_SETTINGS = {
+    "upi_id": "rookhmani@upi",
+    "upi_name": "Rookhmani Kandu",
+    "upi_qr_image": "https://customer-assets.emergentagent.com/job_fast-food-delivery-27/artifacts/guegeb7z_WhatsApp%20Image%202026-04-28%20at%2011.28.05%20PM.jpeg",
+}
+
+
+async def ensure_settings():
+    existing = await db.site_settings.find_one({"key": "site"}, {"_id": 0})
+    if not existing:
+        await db.site_settings.insert_one({"key": "site", **DEFAULT_SETTINGS})
+
+
+@api_router.get("/settings")
+async def get_settings():
+    await ensure_settings()
+    doc = await db.site_settings.find_one({"key": "site"}, {"_id": 0})
+    return {
+        "upi_id": doc.get("upi_id", DEFAULT_SETTINGS["upi_id"]),
+        "upi_name": doc.get("upi_name", DEFAULT_SETTINGS["upi_name"]),
+        "upi_qr_image": doc.get("upi_qr_image", DEFAULT_SETTINGS["upi_qr_image"]),
+    }
+
+
+@api_router.put("/settings")
+async def update_settings(payload: SiteSettingsUpdate):
+    update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(400, "Nothing to update")
+    await ensure_settings()
+    await db.site_settings.update_one({"key": "site"}, {"$set": update_data})
+    return await get_settings()
 
 
 # ============== STRIPE CHECKOUT ==============
@@ -523,6 +598,7 @@ logger = logging.getLogger(__name__)
 async def on_startup():
     try:
         await seed_menu_if_empty()
+        await ensure_settings()
     except Exception as e:
         logger.exception("seed failed: %s", e)
 

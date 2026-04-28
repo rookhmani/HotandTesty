@@ -7,12 +7,15 @@ import {
     DialogDescription,
 } from "../components/ui/dialog";
 import { useCart } from "../context/CartContext";
-import { createOrder, initStripe } from "../lib/api";
-import { Loader2, CreditCard, Wallet } from "lucide-react";
+import { createOrder } from "../lib/api";
+import { Loader2, Wallet, QrCode } from "lucide-react";
 import { toast } from "sonner";
+import UPIPaymentModal from "./UPIPaymentModal";
+import { useNavigate } from "react-router-dom";
 
 export default function CheckoutDialog({ open, onOpenChange }) {
     const { items, subtotal, clearCart, setOpen: setCartOpen } = useCart();
+    const navigate = useNavigate();
     const [form, setForm] = useState({
         customer_name: "",
         phone: "",
@@ -21,6 +24,8 @@ export default function CheckoutDialog({ open, onOpenChange }) {
     });
     const [paymentMethod, setPaymentMethod] = useState("cod");
     const [loading, setLoading] = useState(false);
+    const [upiOpen, setUpiOpen] = useState(false);
+    const [pendingOrder, setPendingOrder] = useState(null);
 
     const deliveryFee = subtotal === 0 ? 0 : subtotal >= 300 ? 0 : 30;
     const total = subtotal + deliveryFee;
@@ -54,13 +59,11 @@ export default function CheckoutDialog({ open, onOpenChange }) {
                 })),
             };
             const order = await createOrder(orderPayload);
-            if (paymentMethod === "online") {
-                const session = await initStripe(order.id);
-                if (session?.url) {
-                    window.location.href = session.url;
-                    return;
-                }
-                throw new Error("Stripe session failed");
+            if (paymentMethod === "upi") {
+                setPendingOrder(order);
+                setUpiOpen(true);
+                onOpenChange(false);
+                setCartOpen(false);
             } else {
                 toast.success("Order placed!", {
                     description: `Order #${order.id.slice(0, 8)} · We'll call you to confirm.`,
@@ -68,6 +71,7 @@ export default function CheckoutDialog({ open, onOpenChange }) {
                 clearCart();
                 onOpenChange(false);
                 setCartOpen(false);
+                navigate(`/order/${order.id}`);
             }
         } catch (err) {
             toast.error("Something went wrong", {
@@ -78,111 +82,126 @@ export default function CheckoutDialog({ open, onOpenChange }) {
         }
     };
 
+    const onUPIPaid = (updatedOrder) => {
+        setUpiOpen(false);
+        clearCart();
+        navigate(`/order/${updatedOrder.id}`);
+    };
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent
-                data-testid="checkout-dialog"
-                className="bg-[#1A1A1A] border border-[#2a2a2a] text-[#F5F5F0] sm:max-w-lg max-h-[90vh] overflow-y-auto"
-            >
-                <DialogHeader>
-                    <DialogTitle className="font-anton text-2xl uppercase tracking-tight">
-                        Checkout
-                    </DialogTitle>
-                    <DialogDescription className="text-[#A1A1AA]">
-                        Enter your details and pick a payment method.
-                    </DialogDescription>
-                </DialogHeader>
+        <>
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent
+                    data-testid="checkout-dialog"
+                    className="bg-[#1A1A1A] border border-[#2a2a2a] text-[#F5F5F0] sm:max-w-lg max-h-[90vh] overflow-y-auto"
+                >
+                    <DialogHeader>
+                        <DialogTitle className="font-anton text-2xl uppercase tracking-tight">
+                            Checkout
+                        </DialogTitle>
+                        <DialogDescription className="text-[#A1A1AA]">
+                            Enter your details and pick a payment method.
+                        </DialogDescription>
+                    </DialogHeader>
 
-                <form onSubmit={onSubmit} className="space-y-4 mt-2">
-                    <Field
-                        label="Full Name"
-                        testId="checkout-name"
-                        value={form.customer_name}
-                        onChange={onChange("customer_name")}
-                        required
-                    />
-                    <Field
-                        label="Phone"
-                        type="tel"
-                        testId="checkout-phone"
-                        value={form.phone}
-                        onChange={onChange("phone")}
-                        required
-                    />
-                    <Field
-                        label="Delivery Address"
-                        testId="checkout-address"
-                        value={form.address}
-                        onChange={onChange("address")}
-                        required
-                        textarea
-                    />
-                    <Field
-                        label="Notes (optional)"
-                        testId="checkout-notes"
-                        value={form.notes}
-                        onChange={onChange("notes")}
-                        textarea
-                    />
-
-                    <div>
-                        <div className="text-xs font-mono uppercase tracking-widest text-[#A1A1AA] mb-2">
-                            Payment Method
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <PaymentTile
-                                active={paymentMethod === "cod"}
-                                onClick={() => setPaymentMethod("cod")}
-                                icon={Wallet}
-                                title="Cash on Delivery"
-                                subtitle="Pay when it arrives"
-                                testId="payment-cod"
-                            />
-                            <PaymentTile
-                                active={paymentMethod === "online"}
-                                onClick={() => setPaymentMethod("online")}
-                                icon={CreditCard}
-                                title="Pay Online"
-                                subtitle="Card / UPI via Stripe"
-                                testId="payment-online"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="bg-[#0D0D0D] border border-[#2a2a2a] rounded-xl p-4 space-y-1.5 text-sm">
-                        <Row label="Subtotal" value={`₹${subtotal}`} />
-                        <Row
-                            label="Delivery"
-                            value={deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}
+                    <form onSubmit={onSubmit} className="space-y-4 mt-2">
+                        <Field
+                            label="Full Name"
+                            testId="checkout-name"
+                            value={form.customer_name}
+                            onChange={onChange("customer_name")}
+                            required
                         />
-                        <div className="flex items-center justify-between pt-2 border-t border-[#2a2a2a] mt-2">
-                            <span className="font-anton text-xl uppercase">Total</span>
-                            <span className="font-anton text-2xl text-[#FFD700]">
-                                ₹{total}
-                            </span>
-                        </div>
-                    </div>
+                        <Field
+                            label="Phone"
+                            type="tel"
+                            testId="checkout-phone"
+                            value={form.phone}
+                            onChange={onChange("phone")}
+                            required
+                        />
+                        <Field
+                            label="Delivery Address"
+                            testId="checkout-address"
+                            value={form.address}
+                            onChange={onChange("address")}
+                            required
+                            textarea
+                        />
+                        <Field
+                            label="Notes (optional)"
+                            testId="checkout-notes"
+                            value={form.notes}
+                            onChange={onChange("notes")}
+                            textarea
+                        />
 
-                    <button
-                        type="submit"
-                        disabled={loading || items.length === 0}
-                        data-testid="checkout-submit"
-                        className="btn-primary w-full inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                        {loading ? (
-                            <>
-                                <Loader2 size={16} className="animate-spin" />
-                                Processing…
-                            </>
-                        ) : paymentMethod === "online" ? (
-                            <>Pay ₹{total} & Order</>
-                        ) : (
-                            <>Place Order · ₹{total}</>
-                        )}
-                    </button>
-                </form>
-            </DialogContent>
-        </Dialog>
+                        <div>
+                            <div className="text-xs font-mono uppercase tracking-widest text-[#A1A1AA] mb-2">
+                                Payment Method
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <PaymentTile
+                                    active={paymentMethod === "cod"}
+                                    onClick={() => setPaymentMethod("cod")}
+                                    icon={Wallet}
+                                    title="Cash on Delivery"
+                                    subtitle="Pay when it arrives"
+                                    testId="payment-cod"
+                                />
+                                <PaymentTile
+                                    active={paymentMethod === "upi"}
+                                    onClick={() => setPaymentMethod("upi")}
+                                    icon={QrCode}
+                                    title="Pay via UPI"
+                                    subtitle="Scan QR with any UPI app"
+                                    testId="payment-upi"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="bg-[#0D0D0D] border border-[#2a2a2a] rounded-xl p-4 space-y-1.5 text-sm">
+                            <Row label="Subtotal" value={`₹${subtotal}`} />
+                            <Row
+                                label="Delivery"
+                                value={deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}
+                            />
+                            <div className="flex items-center justify-between pt-2 border-t border-[#2a2a2a] mt-2">
+                                <span className="font-anton text-xl uppercase">Total</span>
+                                <span className="font-anton text-2xl text-[#FFD700]">
+                                    ₹{total}
+                                </span>
+                            </div>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={loading || items.length === 0}
+                            data-testid="checkout-submit"
+                            className="btn-primary w-full inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                            {loading ? (
+                                <>
+                                    <Loader2 size={16} className="animate-spin" />
+                                    Processing…
+                                </>
+                            ) : paymentMethod === "upi" ? (
+                                <>Continue to UPI Payment · ₹{total}</>
+                            ) : (
+                                <>Place Order · ₹{total}</>
+                            )}
+                        </button>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            <UPIPaymentModal
+                open={upiOpen}
+                onOpenChange={setUpiOpen}
+                order={pendingOrder}
+                onPaid={onUPIPaid}
+            />
+        </>
     );
 }
 
