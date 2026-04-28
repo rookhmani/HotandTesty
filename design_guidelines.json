@@ -1,0 +1,111 @@
+{
+  "project_name": "Hot And Tasty Food Shop",
+  "theme_and_archetype": {
+    "theme": "dark",
+    "archetype": "Archetype 5: Jewel & Luxury (Premium Moody Fast Food Adaptation)",
+    "description": "A cinematic, dark, and highly appetizing aesthetic that makes vibrant food colors pop against deep black and rich orange/gold accents. This approach emphasizes quality, heat, and bold flavors."
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Anton",
+      "body": "Outfit",
+      "mono": "Space Mono"
+    },
+    "scale": {
+      "h1": "text-5xl sm:text-6xl lg:text-7xl font-anton uppercase tracking-tight leading-none",
+      "h2": "text-4xl sm:text-5xl font-anton uppercase tracking-tight",
+      "h3": "text-2xl sm:text-3xl font-anton uppercase tracking-normal",
+      "h4": "text-xl sm:text-2xl font-outfit font-bold",
+      "body": "text-base font-outfit text-[#F5F5F0]/80",
+      "small": "text-sm font-outfit font-medium tracking-wide uppercase"
+    },
+    "rules": [
+      "Headings must use Anton in uppercase for a punchy, street-food-meets-premium vibe.",
+      "Body text must use Outfit for maximum legibility on dark backgrounds.",
+      "Never use Inter, Roboto, or Poppins."
+    ]
+  },
+  "colors": {
+    "background": "#0D0D0D",
+    "primary": "#FF6B35",
+    "primary_hover": "#E85D2A",
+    "secondary": "#FFD700",
+    "surface": "#1A1A1A",
+    "surface_border": "#2A2A2A",
+    "text_primary": "#F5F5F0",
+    "text_secondary": "#A1A1AA",
+    "success": "#22C55E",
+    "error": "#EF4444"
+  },
+  "spacing_and_layout": {
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "section_padding": "py-20 sm:py-32",
+    "grid_system": {
+      "menu": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6",
+      "bento": "grid grid-cols-1 md:grid-cols-12 gap-6"
+    },
+    "surface_treatment": {
+      "cards": "bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl overflow-hidden hover:border-[#FF6B35]/50 transition-colors duration-300",
+      "glass": "bg-[#0D0D0D]/80 backdrop-blur-xl border-b border-[#2A2A2A]"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#FF6B35] text-[#F5F5F0] hover:bg-[#E85D2A] rounded-md px-6 py-3 font-outfit font-bold transition-all active:scale-95 shadow-[0_0_15px_rgba(255,107,53,0.3)]",
+      "secondary": "bg-transparent border border-[#FFD700] text-[#FFD700] hover:bg-[#FFD700]/10 rounded-md px-6 py-3 font-outfit font-bold transition-all active:scale-95",
+      "pill_filter": "rounded-full px-4 py-2 text-sm font-medium border border-[#2A2A2A] hover:border-[#FF6B35] data-[state=active]:bg-[#FF6B35] data-[state=active]:text-white transition-all"
+    },
+    "menu_card": {
+      "structure": "Image top (h-48 object-cover), Body padding p-5. Flex-col layout.",
+      "title": "text-xl font-anton uppercase",
+      "price": "text-[#FFD700] font-bold text-lg",
+      "variant_select": "For items with Half/Full options, use a compact toggle or Shadcn Select before the Add to Cart button."
+    },
+    "header": {
+      "style": "sticky top-0 z-50 bg-[#0D0D0D]/90 backdrop-blur-lg border-b border-[#2A2A2A]",
+      "logo": "text-2xl font-anton text-[#FF6B35] uppercase tracking-wider"
+    },
+    "cart_drawer": {
+      "style": "bg-[#1A1A1A] border-l border-[#2A2A2A] text-[#F5F5F0]",
+      "item": "flex items-center gap-4 py-4 border-b border-[#2A2A2A]/50"
+    }
+  },
+  "motion_and_interactions": {
+    "scroll": "Smooth scrolling via Lenis (or similar CSS scroll-behavior: smooth)",
+    "reveal": "Fade-up on scroll for menu items and section headers using framer-motion (y: 20, opacity: 0 -> y: 0, opacity: 1)",
+    "hover": "Image scale-up on card hover (105%), subtle border color shift to #FF6B35",
+    "micro_interactions": "Cart icon pulse when item added, numeric badge pop animation"
+  },
+  "image_urls": {
+    "hero": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/ce18adc2-211b-4885-b808-4ca6e5f62cc2/images/66235363709eca9c9ed18aac25e736ba6c8aa0558cd863e9958beabd05ba5170.png",
+      "description": "Cinematic spicy food hero background"
+    },
+    "menu_items": {
+      "chowmein": "https://images.pexels.com/photos/9395910/pexels-photo-9395910.jpeg",
+      "momos": "https://images.pexels.com/photos/28445589/pexels-photo-28445589.jpeg",
+      "rolls": "https://images.pexels.com/photos/5713744/pexels-photo-5713744.jpeg",
+      "rice_biryani": "https://images.unsplash.com/photo-1603133872878-684f208fb84b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxmcmllZCUyMHJpY2UlMjBiaXJ5YW5pJTIwZGFya3xlbnwwfHx8fDE3NzczOTQzMzN8MA&ixlib=rb-4.1.0&q=85",
+      "chilli_paneer": "https://images.pexels.com/photos/29631461/pexels-photo-29631461.jpeg",
+      "manchurian": "https://images.pexels.com/photos/28674543/pexels-photo-28674543.jpeg",
+      "fries": "https://images.pexels.com/photos/31806278/pexels-photo-31806278.jpeg",
+      "generic_fast_food": "https://images.unsplash.com/photo-1611309454921-16cef3438ee0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwyfHxmYXN0JTIwZm9vZCUyMGJ1cmdlciUyMGRhcmslMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NzM5NDM1Mnww&ixlib=rb-4.1.0&q=85"
+    }
+  },
+  "testing": {
+    "attributes": "ALL interactive elements MUST include data-testid. Examples: data-testid='add-to-cart-button', data-testid='menu-filter-momos', data-testid='checkout-submit', data-testid='cart-drawer-trigger'."
+  },
+  "instructions_to_main_agent": [
+    "Ensure the application strictly follows the color palette provided. No pure whites for backgrounds; stick to #0D0D0D and #1A1A1A.",
+    "Implement a clean, modern sticky navbar with the cart icon indicating live count. Use glassmorphism carefully over the dark background.",
+    "For the Menu Section, construct a robust Tab/Filter component. The filters are: All | Potatoes | Rolls | Momos | Chowmein | Rice | Main Course | Chopsy.",
+    "Menu Data Structure MUST support variant pricing (Half/Full) for specific items like Chowmein or Rice. Display these clearly on the UI before adding to cart (e.g., 'Half: ₹50 / Full: ₹60' radio toggle or select dropdown).",
+    "Integrate Shadcn UI elements but customize their borders, radii, and bg colors to match the #1A1A1A cards and #FF6B35 active states.",
+    "In the About Section, implement a striking 5.0 Star badge (#FFD700) and layout the story beside it.",
+    "Order Info Section must embed a Google Map iFrame pointing to Ghaziabad.",
+    "Set up standard Stripe checkout form for INR in the cart drawer / checkout page flow.",
+    "Create a basic Admin panel route (e.g., /admin) to manage menu items and view orders. Use a dense grid/table layout for the admin.",
+    "Use Lucide-React or Phosphor Icons for the UI.",
+    "All components must be .js files, not .tsx. Use prop-types if necessary instead of TS types."
+  ]
+}
