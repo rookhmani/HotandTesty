@@ -19,34 +19,6 @@ export const createOrder = async (payload) => {
     return data;
 };
 
-export const initStripe = async (orderId) => {
-    const { data } = await api.post("/checkout/session", {
-        order_id: orderId,
-        origin_url: window.location.origin,
-    });
-    return data;
-};
-
-export const checkPayment = async (sessionId) => {
-    const { data } = await api.get(`/checkout/status/${sessionId}`);
-    return data;
-};
-
-export const adminLogin = async (password) => {
-    const { data } = await api.post("/admin/login", { password });
-    return data;
-};
-
-export const fetchSettings = async () => {
-    const { data } = await api.get("/settings");
-    return data;
-};
-
-export const updateSettings = async (payload) => {
-    const { data } = await api.put("/settings", payload);
-    return data;
-};
-
 export const submitUTR = async (orderId, utr) => {
     const { data } = await api.post(`/orders/${orderId}/utr`, { utr });
     return data;
@@ -54,6 +26,11 @@ export const submitUTR = async (orderId, utr) => {
 
 export const getOrder = async (orderId) => {
     const { data } = await api.get(`/orders/${orderId}`);
+    return data;
+};
+
+export const adminLogin = async (password) => {
+    const { data } = await api.post("/admin/login", { password });
     return data;
 };
 
@@ -79,5 +56,15 @@ export const updateMenuItem = async (id, payload) => {
 
 export const deleteMenuItem = async (id) => {
     const { data } = await api.delete(`/menu/${id}`);
+    return data;
+};
+
+export const fetchSettings = async () => {
+    const { data } = await api.get("/settings");
+    return data;
+};
+
+export const updateSettings = async (payload) => {
+    const { data } = await api.put("/settings", payload);
     return data;
 };

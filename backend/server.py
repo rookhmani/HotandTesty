@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request
+from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -10,13 +10,6 @@ from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone
 
-from emergentintegrations.payments.stripe.checkout import (
-    StripeCheckout,
-    CheckoutSessionResponse,
-    CheckoutStatusResponse,
-    CheckoutSessionRequest,
-)
-
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -25,7 +18,6 @@ mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
 
-STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "sk_test_emergent")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 
 app = FastAPI(title="Hot And Tasty Food Shop API")
@@ -85,7 +77,7 @@ class OrderCreate(BaseModel):
     address: str
     notes: Optional[str] = ""
     items: List[CartItem]
-    payment_method: str = "cod"  # cod | online
+    payment_method: str = "cod"  # cod | upi
 
 
 class Order(BaseModel):
@@ -98,10 +90,9 @@ class Order(BaseModel):
     subtotal: float
     delivery_fee: float = 0.0
     total: float
-    payment_method: str  # cod | upi | online
-    payment_status: str = "pending"  # pending | paid | failed | cod
+    payment_method: str  # cod | upi
+    payment_status: str = "pending"  # pending | awaiting_payment | paid | cod
     order_status: str = "received"  # received | preparing | out-for-delivery | delivered | cancelled
-    stripe_session_id: Optional[str] = None
     utr: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -112,11 +103,6 @@ class OrderStatusUpdate(BaseModel):
 
 class UTRSubmit(BaseModel):
     utr: str
-
-
-class CheckoutInitRequest(BaseModel):
-    order_id: str
-    origin_url: str
 
 
 class AdminLoginRequest(BaseModel):
@@ -195,7 +181,9 @@ async def create_order(payload: OrderCreate):
     if not payload.items:
         raise HTTPException(400, "Cart is empty")
 
-    # Validate items against menu and recompute price server-side
+    if payload.payment_method not in ("cod", "upi"):
+        raise HTTPException(400, "Invalid payment method")
+
     item_ids = list({i.item_id for i in payload.items})
     menu_docs = await db.menu_items.find(
         {"id": {"$in": item_ids}}, {"_id": 0}
@@ -227,12 +215,7 @@ async def create_order(payload: OrderCreate):
     delivery_fee = 0.0 if subtotal >= 300 else 30.0
     total = round(subtotal + delivery_fee, 2)
 
-    if payload.payment_method == "cod":
-        payment_status = "cod"
-    elif payload.payment_method == "upi":
-        payment_status = "awaiting_payment"
-    else:
-        payment_status = "pending"
+    payment_status = "cod" if payload.payment_method == "cod" else "awaiting_payment"
 
     order = Order(
         customer_name=payload.customer_name,
@@ -338,138 +321,6 @@ async def update_settings(payload: SiteSettingsUpdate):
     await ensure_settings()
     await db.site_settings.update_one({"key": "site"}, {"$set": update_data})
     return await get_settings()
-
-
-# ============== STRIPE CHECKOUT ==============
-@api_router.post("/checkout/session")
-async def create_checkout_session(payload: CheckoutInitRequest, http_request: Request):
-    order = await db.orders.find_one({"id": payload.order_id}, {"_id": 0})
-    if not order:
-        raise HTTPException(404, "Order not found")
-
-    if order.get("payment_status") == "paid":
-        raise HTTPException(400, "Order already paid")
-
-    host_url = str(http_request.base_url)
-    webhook_url = f"{host_url}api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-
-    origin = payload.origin_url.rstrip("/")
-    success_url = f"{origin}/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{origin}/cancel?order_id={order['id']}"
-
-    amount = float(order["total"])  # server-side amount
-    metadata = {
-        "order_id": order["id"],
-        "customer_phone": order["phone"],
-        "source": "hot_tasty_web",
-    }
-
-    req = CheckoutSessionRequest(
-        amount=amount,
-        currency="inr",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata=metadata,
-    )
-
-    session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(req)
-
-    # Create payment_transactions entry
-    tx = {
-        "id": str(uuid.uuid4()),
-        "order_id": order["id"],
-        "session_id": session.session_id,
-        "amount": amount,
-        "currency": "inr",
-        "metadata": metadata,
-        "payment_status": "initiated",
-        "status": "open",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.payment_transactions.insert_one(tx)
-
-    await db.orders.update_one(
-        {"id": order["id"]}, {"$set": {"stripe_session_id": session.session_id}}
-    )
-
-    return {"url": session.url, "session_id": session.session_id}
-
-
-@api_router.get("/checkout/status/{session_id}")
-async def get_checkout_status(session_id: str, http_request: Request):
-    tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
-    if not tx:
-        raise HTTPException(404, "Transaction not found")
-
-    host_url = str(http_request.base_url)
-    webhook_url = f"{host_url}api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-
-    new_payment_status = tx.get("payment_status", "initiated")
-    new_status = tx.get("status", "open")
-
-    try:
-        status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(
-            session_id
-        )
-        new_payment_status = status.payment_status
-        new_status = status.status
-
-        # Only flip order to paid once
-        if new_payment_status == "paid" and tx.get("payment_status") != "paid":
-            await db.orders.update_one(
-                {"id": tx["order_id"]},
-                {"$set": {"payment_status": "paid", "order_status": "preparing"}},
-            )
-
-        await db.payment_transactions.update_one(
-            {"session_id": session_id},
-            {"$set": {"payment_status": new_payment_status, "status": new_status}},
-        )
-    except Exception as e:
-        # Stripe lookup can fail momentarily after session creation (propagation lag)
-        # Fall back to last-known DB status instead of leaking a 500
-        logging.warning("checkout status lookup failed: %s", e)
-
-    return {
-        "session_id": session_id,
-        "payment_status": new_payment_status,
-        "status": new_status,
-        "order_id": tx["order_id"],
-        "amount": tx["amount"],
-        "currency": tx["currency"],
-    }
-
-
-@api_router.post("/webhook/stripe")
-async def stripe_webhook(request: Request):
-    body = await request.body()
-    sig = request.headers.get("Stripe-Signature", "")
-    host_url = str(request.base_url)
-    webhook_url = f"{host_url}api/webhook/stripe"
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-    try:
-        resp = await stripe_checkout.handle_webhook(body, sig)
-    except Exception as e:
-        logging.exception("webhook error")
-        raise HTTPException(400, f"Webhook error: {e}")
-
-    if resp.session_id:
-        update = {"payment_status": resp.payment_status}
-        await db.payment_transactions.update_one(
-            {"session_id": resp.session_id}, {"$set": update}
-        )
-        if resp.payment_status == "paid":
-            tx = await db.payment_transactions.find_one(
-                {"session_id": resp.session_id}, {"_id": 0}
-            )
-            if tx:
-                await db.orders.update_one(
-                    {"id": tx["order_id"]},
-                    {"$set": {"payment_status": "paid", "order_status": "preparing"}},
-                )
-    return {"ok": True}
 
 
 # ============== ADMIN ==============
@@ -600,7 +451,7 @@ async def on_startup():
         await seed_menu_if_empty()
         await ensure_settings()
     except Exception as e:
-        logger.exception("seed failed: %s", e)
+        logger.exception("startup error: %s", e)
 
 
 @app.on_event("shutdown")

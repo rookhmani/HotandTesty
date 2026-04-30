@@ -4,8 +4,6 @@ import { Toaster } from "sonner";
 import { CartProvider } from "./context/CartContext";
 import HomePage from "./pages/HomePage";
 import AdminPage from "./pages/AdminPage";
-import SuccessPage from "./pages/SuccessPage";
-import CancelPage from "./pages/CancelPage";
 import OrderSuccessPage from "./pages/OrderSuccessPage";
 
 function App() {
@@ -17,8 +15,6 @@ function App() {
                         <Route path="/" element={<HomePage />} />
                         <Route path="/admin" element={<AdminPage />} />
                         <Route path="/order/:orderId" element={<OrderSuccessPage />} />
-                        <Route path="/success" element={<SuccessPage />} />
-                        <Route path="/cancel" element={<CancelPage />} />
                     </Routes>
                 </BrowserRouter>
                 <Toaster
